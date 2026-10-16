@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WHO RUINED? — Deadlock Match Forensics</title>
+  <meta name="description" content="Разбор матчей Deadlock по Match ID: кто внёс наибольший вклад в поражение — по статистике матча.">
+  <meta name="theme-color" content="#07080b">
+  <meta property="og:title" content="WHO RUINED? — Deadlock Match Forensics">
+  <meta property="og:description" content="Введите Match ID и узнайте, чей вклад в поражение был самым большим — по статистике матча.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307080b'/%3E%3Cpath d='M14 18h8l4 20 6-20h4l6 20 4-20h8l-8 30h-7l-5-17-5 17h-7z' fill='%23ff3b3b'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    // Код сайта GoatCounter (например, "whoruined"). Пусто — счётчик выключен.
+    window.WR_GOATCOUNTER = '';
+    // Ссылка и имя автора для подвала.
+    window.WR_AUTHOR = { name: 'Автор', url: 'https://github.com/imkita339-afk' };
+  </script>
+</head>
+<body>
+  <div class="bg" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="./">WHO<span>RUINED?</span></a>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-lang="ru">RU</button>
+      <button type="button" data-lang="en">EN</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <p class="eyebrow">DEADLOCK / MATCH FORENSICS</p>
+      <h1 class="title">WHO <span>RUINED?</span></h1>
+      <p class="sub" data-i18n>Введите Match ID — разберём проигравшую команду и покажем, чей вклад в поражение был самым большим. Честно, с цифрами и аргументами.</p>
+      <form id="form" class="search" autocomplete="off">
+        <label class="sr-only" for="matchId" data-i18n>Match ID</label>
+        <input id="matchId" name="match" inputmode="numeric" pattern="[0-9]*" maxlength="12" data-i18n-ph placeholder="Match ID, например 117895792">
+        <button id="go" type="submit" class="btn btn-primary" data-i18n>АНАЛИЗИРОВАТЬ</button>
+      </form>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <div id="history" class="chips" aria-label="История"></div>
+    </section>
+
+    <div id="result" class="result" hidden>
+      <section id="verdict" class="panel verdict"></section>
+      <section id="awards" class="awards"></section>
+      <section id="near" class="panel"></section>
+      <section id="summary" class="panel"></section>
+      <section id="numbers" class="panel"></section>
+      <section id="chart" class="panel"></section>
+      <section id="expect" class="panel"></section>
+      <section id="winners" class="panel"></section>
+      <section id="story" class="panel"></section>
+      <section id="losers" class="panel"></section>
+      <section id="episodes" class="panel"></section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <p><span data-i18n>Данные:</span> <a href="https://deadlock-api.com" target="_blank" rel="noopener">deadlock-api.com</a> · <span data-i18n>Автор:</span> <a id="authorLink" href="#" target="_blank" rel="noopener">—</a></p>
+    <p class="muted" data-i18n>Неофициальный фан-проект. Deadlock — товарный знак Valve Corporation. Сайт не связан с Valve.</p>
+  </footer>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <button type="button" class="modal-x" aria-label="Закрыть">×</button>
+      <h3 id="modalTitle"></h3>
+      <div id="modalBody"></div>
+      <p class="disclaimer" data-i18n>Разбор основан на статистике матча. Это оценка алгоритма по набору показателей, а не утверждение, что один игрок единолично проиграл игру.</p>
+    </div>
+  </div>
+
+  <script src="js/extras.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
