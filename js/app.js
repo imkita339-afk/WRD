@@ -185,6 +185,10 @@
       try { return await res.json(); } catch (e) { throw new ApiError('data', res.status); }
     }
     const ra = parseInt(res.headers.get('Retry-After') || '', 10);
+    // Часовой лимит на загрузку новых матчей из Steam (3 в час на IP): остальные запросы
+    // при этом работают, поэтому общую паузу не ставим
+    const period = parseInt(res.headers.get('RateLimit-Period') || '', 10);
+    if (res.status === 429 && period >= 600) throw new ApiError('steamlimit', 429, ra > 0 ? ra : period);
     if (res.status === 429 || (res.status === 503 && ra > 0)) {
       const s = ra > 0 ? ra : CFG.defaultCooldown;
       WR.cooldown.set(Date.now() + s * 1000);
@@ -1241,7 +1245,8 @@
     const k = (e && e.kind) || 'data';
     const map = {
       rate: ['Слишком много запросов к API. Подождите {s} с и попробуйте снова.', { s: e.retryAfter || CFG.defaultCooldown }],
-      notfound: ['Матч не найден. Проверьте Match ID.'],
+      notfound: ['Матч не найден ни в базе deadlock-api.com, ни в Steam. Проверьте Match ID: данные очень старых матчей и матчей из приватных лобби Valve не отдаёт.'],
+      steamlimit: ['Этого матча ещё нет в базе, а лимит загрузки новых матчей из Steam исчерпан (3 в час на IP). Попробуйте через {m} мин. Уже загруженные матчи открываются как обычно.', { m: Math.max(1, Math.ceil((e.retryAfter || 3600) / 60)) }],
       unavailable: ['Матч не найден или ещё не обработан. Если игра закончилась недавно — попробуйте позже.'],
       bad: ['Некорректный Match ID.'],
       server: ['API вернул ошибку ({code}). Попробуйте позже.', { code: e.status }],
