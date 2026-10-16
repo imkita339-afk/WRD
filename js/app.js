@@ -150,6 +150,19 @@
     }
   }
 
+  async function apiReachable() {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const r = await fetch(CFG.api + '/v1/assets/ranks', { signal: ctrl.signal });
+      return r.ok;
+    } catch (e) {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function api(path) {
     const until = WR.cooldown.get();
     if (until > Date.now()) throw new ApiError('rate', 429, Math.ceil((until - Date.now()) / 1000));
@@ -161,7 +174,10 @@
       res = await fetch(CFG.api + path, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
     } catch (e) {
       if (e && e.name === 'AbortError') throw new ApiError('timeout');
-      throw new ApiError(navigator.onLine === false ? 'offline' : 'network');
+      if (navigator.onLine === false) throw new ApiError('offline');
+      // Ошибки Cloudflare (502/530 и т. п.) приходят без CORS-заголовков и выглядят как обрыв сети.
+      // Если закэшированный справочник отвечает — сеть в порядке, лежит сервер API.
+      throw new ApiError((await apiReachable()) ? 'down' : 'network');
     } finally {
       clearTimeout(timer);
     }
@@ -1232,6 +1248,7 @@
       timeout: ['API не отвечает. Попробуйте позже.'],
       offline: ['Нет подключения к интернету.'],
       network: ['Не удалось связаться с API: нет сети или сервис недоступен.'],
+      down: ['Сервер deadlock-api.com сейчас недоступен — это сбой на их стороне. Уже разобранные ранее матчи могут открываться, новые — нет. Попробуйте позже.'],
       nowinner: ['В этом матче нет победителя — разбирать нечего.'],
       data: ['Не удалось разобрать данные матча.'],
     };

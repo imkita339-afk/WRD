@@ -168,6 +168,7 @@ window.WR = (function () {
     "Не наступила": "Not reached",
     "Не удалось разобрать данные матча.": "Couldn't parse the match data.",
     "Не удалось связаться с API: нет сети или сервис недоступен.": "Couldn't reach the API: no network or the service is down.",
+    "Сервер deadlock-api.com сейчас недоступен — это сбой на их стороне. Уже разобранные ранее матчи могут открываться, новые — нет. Попробуйте позже.": "The deadlock-api.com server is down right now — the problem is on their side. Previously analyzed matches may still open, new ones won't. Please try again later.",
     "Не удалось скопировать — браузер запретил доступ к буферу.": "Couldn't copy — the browser blocked clipboard access.",
     "Не удалось создать карточку.": "Couldn't create the card.",
     "Небольшое": "Minor",
