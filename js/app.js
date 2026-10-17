@@ -15,9 +15,10 @@
   const CFG = {
     // Свой прокси (worker/) из index.html, иначе — напрямую к deadlock-api.com
     api: (window.WR_API || 'https://api.deadlock-api.com').replace(/\/+$/, ''),
-    imgApi: 'https://api.deadlock-api.com',  // картинки рангов — всегда напрямую
+    direct: 'https://api.deadlock-api.com',  // картинки рангов, новые матчи и запасной путь
     assetsTTL: 24 * 60 * 60 * 1000,   // справочники героев/предметов/рангов — 24 часа
     requestTimeout: 30000,
+    proxyStoreDelay: 5000,            // через сколько мс после прямой загрузки матча просить прокси сохранить его
     defaultCooldown: 60,              // пауза при 429/503 без Retry-After, секунды
     teams: { 0: 'Amber Hand', 1: 'Sapphire Flame' },
 
@@ -165,7 +166,7 @@
     }
   }
 
-  async function api(path) {
+  async function api(path, base = CFG.api) {
     const until = WR.cooldown.get();
     if (until > Date.now()) throw new ApiError('rate', 429, Math.ceil((until - Date.now()) / 1000));
     if (navigator.onLine === false) throw new ApiError('offline');
@@ -173,10 +174,12 @@
     const timer = setTimeout(() => ctrl.abort(), CFG.requestTimeout);
     let res;
     try {
-      res = await fetch(CFG.api + path, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+      res = await fetch(base + path, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
     } catch (e) {
-      if (e && e.name === 'AbortError') throw new ApiError('timeout');
       if (navigator.onLine === false) throw new ApiError('offline');
+      // Свой прокси не отвечает — идём к deadlock-api.com напрямую
+      if (base !== CFG.direct) return api(path, CFG.direct);
+      if (e && e.name === 'AbortError') throw new ApiError('timeout');
       // Ошибки Cloudflare (502/530 и т. п.) приходят без CORS-заголовков и выглядят как обрыв сети.
       // Если закэшированный справочник отвечает — сеть в порядке, лежит сервер API.
       throw new ApiError((await apiReachable()) ? 'down' : 'network');
@@ -191,6 +194,8 @@
     // при этом работают, поэтому общую паузу не ставим
     const period = parseInt(res.headers.get('RateLimit-Period') || '', 10);
     if (res.status === 429 && period >= 600) throw new ApiError('steamlimit', 429, ra > 0 ? ra : period);
+    // «Steam is busy»: долгий Retry-After относится только к загрузке этого матча из Steam
+    if (res.status === 503 && ra >= 120) throw new ApiError('steambusy', 503, ra);
     if (res.status === 429 || (res.status === 503 && ra > 0)) {
       const s = ra > 0 ? ra : CFG.defaultCooldown;
       WR.cooldown.set(Date.now() + s * 1000);
@@ -198,6 +203,8 @@
     }
     // Прокси отвечает 502, когда сам deadlock-api.com недоступен
     if (res.status === 502) throw new ApiError('down', 502);
+    // Прокси без ключа: матча нет в базе deadlock-api.com, грузить из Steam надо напрямую
+    if (res.status === 404 && res.headers.get('X-WR-Direct')) throw new ApiError('direct', 404);
     if (res.status === 404) throw new ApiError('notfound', 404);
     if (res.status === 400) throw new ApiError('bad', 400);
     if (res.status === 503) throw new ApiError('unavailable', 503);
@@ -284,10 +291,25 @@
     };
   }
 
+  // Новый матч, которого нет в базе deadlock-api.com, грузится из Steam с IP посетителя
+  // (3 в час на IP): через прокси этот лимит делили бы все. После загрузки матч уже в базе,
+  // и прокси сохраняет его у себя — следующие посетители получат его без лимита.
+  async function matchMetadata(id) {
+    const path = `/v1/matches/${id}/metadata`;
+    try {
+      return await api(path);
+    } catch (e) {
+      if (e.kind !== 'direct') throw e;
+    }
+    const raw = await api(path, CFG.direct);
+    setTimeout(() => fetch(CFG.api + path).catch(() => {}), CFG.proxyStoreDelay);
+    return raw;
+  }
+
   async function loadMatchData(id, onStep) {
     const cached = WR.matchCache.get(id);
     if (cached && cached.v === 1) return Object.assign(cached, { fromCache: true });
-    const raw = await api(`/v1/matches/${id}/metadata`);
+    const raw = await matchMetadata(id);
     const mi = raw && (raw.match_info || raw);
     if (!mi || !Array.isArray(mi.players) || !mi.players.length) throw new ApiError('data');
     const S = slimMatch(mi);
@@ -323,7 +345,7 @@
     }
     const base = (r && r.name) || CFG.rankNames[tier] || `Tier ${tier}`;
     const icon = tier <= 11 && sub >= 1 && sub <= 6
-      ? `${CFG.imgApi}/v1/assets/ranks/${tier}/${sub}/image?format=webp`
+      ? `${CFG.direct}/v1/assets/ranks/${tier}/${sub}/image?format=webp`
       : (r && r.img) || '';
     return { tier, sub, name: sub ? `${base} ${sub}` : base, icon, color: (r && r.color) || '#999' };
   }
@@ -1251,6 +1273,7 @@
       rate: ['Слишком много запросов к API. Подождите {s} с и попробуйте снова.', { s: e.retryAfter || CFG.defaultCooldown }],
       notfound: ['Матч не найден ни в базе deadlock-api.com, ни в Steam. Проверьте Match ID: данные очень старых матчей и матчей из приватных лобби Valve не отдаёт.'],
       steamlimit: ['Этого матча ещё нет в базе, а лимит загрузки новых матчей из Steam исчерпан. Попробуйте через {m} мин. Уже загруженные матчи открываются как обычно.', { m: Math.max(1, Math.ceil((e.retryAfter || 3600) / 60)) }],
+      steambusy: ['Steam сейчас не отдаёт этот матч — так бывает, если игра ещё идёт или только что закончилась. Попробуйте через {m} мин. Уже загруженные матчи открываются как обычно.', { m: Math.max(1, Math.ceil((e.retryAfter || 600) / 60)) }],
       unavailable: ['Матч не найден или ещё не обработан. Если игра закончилась недавно — попробуйте позже.'],
       bad: ['Некорректный Match ID.'],
       server: ['API вернул ошибку ({code}). Попробуйте позже.', { code: e.status }],

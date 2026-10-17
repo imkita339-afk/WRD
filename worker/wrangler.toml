@@ -12,10 +12,10 @@ ALLOWED_ORIGINS = "https://imkita339-afk.github.io"
 binding = "MATCHES"
 id = "11c23dac20024c0080dd7c7c3632f37a"
 
-# Не больше 5 новых (не закэшированных) матчей в минуту с одного IP
+# Не больше 20 новых (не закэшированных) матчей в минуту с одного IP
 [[ratelimits]]
 name = "LIMITER"
 namespace_id = "1001"
-simple = { limit = 5, period = 60 }
+simple = { limit = 20, period = 60 }
 
-# Ключ deadlock-api.com не хранится здесь: npx wrangler secret put DEADLOCK_API_KEY
+# Ключ deadlock-api.com (необязательно) не хранится здесь: npx wrangler secret put DEADLOCK_API_KEY

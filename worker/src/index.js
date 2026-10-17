@@ -2,8 +2,9 @@
  * WHO RUINED? — API-прокси на Cloudflare Workers.
  *
  * Стоит между сайтом и api.deadlock-api.com:
- *  - добавляет API-ключ (секрет DEADLOCK_API_KEY): лимит загрузки новых матчей из Steam
- *    300 в час на ключ вместо 3 в час на IP;
+ *  - с API-ключом (секрет DEADLOCK_API_KEY) грузит новые матчи из Steam: 300 в час на ключ;
+ *    без ключа берёт только матчи из базы deadlock-api.com, а на остальные отвечает 404
+ *    с X-WR-Direct: 1 — сайт загружает их напрямую, с лимитом на IP посетителя;
  *  - навсегда хранит матчи в KV (метаданные завершённого матча не меняются),
  *    повторные открытия не трогают deadlock-api.com вовсе;
  *  - держит справочники в KV и отдаёт их, даже когда deadlock-api.com лежит;
@@ -54,18 +55,24 @@ async function match(id, request, env, ctx, cors) {
   const stored = await env.MATCHES.get(key, { type: 'arrayBuffer', cacheTtl: 86400 });
   if (stored) return jsonText(await gunzip(stored), 200, cors, 'hit', 'public, max-age=604800, immutable');
 
-  // Промах кэша тратит общую квоту ключа на Steam — ограничиваем частоту на IP
+  // Промах кэша тратит квоту апстрима и запись в KV — ограничиваем частоту на IP
   if (env.LIMITER) {
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
     const { success } = await env.LIMITER.limit({ key: ip });
     if (!success) return json({ error: 'too_many_new_matches' }, 429, { ...cors, 'Retry-After': '60' });
   }
 
-  const res = await upstream(`/v1/matches/${id}/metadata`, env);
+  // Без ключа из Steam не грузим: все воркеры выходят к deadlock-api.com с общего адреса,
+  // и лимит 3 матча в час на IP был бы общим для всех. Такие матчи сайт берёт напрямую.
+  const steam = !!env.DEADLOCK_API_KEY;
+  const res = await upstream(`/v1/matches/${id}/metadata${steam ? '' : '?disable_steam=true'}`, env);
   const text = await res.text();
   if (res.ok && isCompleteMatch(text)) {
     ctx.waitUntil(gzip(text).then((buf) => env.MATCHES.put(key, buf)));
     return jsonText(text, 200, cors, 'miss', 'public, max-age=604800, immutable');
+  }
+  if (res.status === 404 && !steam) {
+    return json({ error: 'not_in_database' }, 404, { ...cors, 'X-WR-Direct': '1' });
   }
   return relay(res, text, cors, 'no-store');
 }
@@ -148,7 +155,7 @@ function corsHeaders(request, env) {
   const base = {
     'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
     'Access-Control-Allow-Headers': 'Accept, Content-Type',
-    'Access-Control-Expose-Headers': PASS_HEADERS.join(', ') + ', x-wr-cache',
+    'Access-Control-Expose-Headers': PASS_HEADERS.join(', ') + ', x-wr-cache, x-wr-direct',
     'Access-Control-Max-Age': '86400',
   };
   if (!allowed.length) return { ...base, 'Access-Control-Allow-Origin': '*' };

@@ -241,6 +241,7 @@ window.WR = (function () {
     "Слабое участие в драках": "Weak fight presence",
     "Следующий по шкале — {name} ({hero}): {score}. Разница — {gap}.": "Next on the scale: {name} ({hero}) with {score}. Gap: {gap}.",
     "Слишком много запросов к API. Подождите {s} с и попробуйте снова.": "Too many API requests. Wait {s} s and try again.",
+    "Steam сейчас не отдаёт этот матч — так бывает, если игра ещё идёт или только что закончилась. Попробуйте через {m} мин. Уже загруженные матчи открываются как обычно.": "Steam isn't providing this match right now — this happens while the game is still running or has just ended. Try again in {m} min. Already loaded matches open as usual.",
     "Слово защите": "The defense speaks",
     "Смертей: {d} ({dp10} за 10 мин) — больше, чем в среднем по команде": "Deaths: {d} ({dp10} per 10 min) — more than the team average",
     "Смертей: {d} ({dp10} за 10 мин), из них {late} после 25-й минуты; потеряно {loss} souls": "Deaths: {d} ({dp10} per 10 min), {late} of them after minute 25; {loss} souls lost",
