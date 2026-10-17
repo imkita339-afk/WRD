@@ -5,12 +5,12 @@ compatibility_date = "2025-09-01"
 [vars]
 UPSTREAM = "https://api.deadlock-api.com"
 # Через запятую, без слеша в конце: "https://<user>.github.io,http://localhost:8080". Пусто — любой сайт.
-ALLOWED_ORIGINS = ""
+ALLOWED_ORIGINS = "https://imkita339-afk.github.io"
 
 # Матчи и справочники. id выдаёт: npx wrangler kv namespace create MATCHES
 [[kv_namespaces]]
 binding = "MATCHES"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "11c23dac20024c0080dd7c7c3632f37a"
 
 # Не больше 5 новых (не закэшированных) матчей в минуту с одного IP
 [[ratelimits]]
