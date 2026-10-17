@@ -13,7 +13,9 @@
   // Конфиг: все коэффициенты модели оценки в одном месте
   // ======================================================================
   const CFG = {
-    api: 'https://api.deadlock-api.com',
+    // Свой прокси (worker/) из index.html, иначе — напрямую к deadlock-api.com
+    api: (window.WR_API || 'https://api.deadlock-api.com').replace(/\/+$/, ''),
+    imgApi: 'https://api.deadlock-api.com',  // картинки рангов — всегда напрямую
     assetsTTL: 24 * 60 * 60 * 1000,   // справочники героев/предметов/рангов — 24 часа
     requestTimeout: 30000,
     defaultCooldown: 60,              // пауза при 429/503 без Retry-After, секунды
@@ -194,6 +196,8 @@
       WR.cooldown.set(Date.now() + s * 1000);
       throw new ApiError('rate', res.status, s);
     }
+    // Прокси отвечает 502, когда сам deadlock-api.com недоступен
+    if (res.status === 502) throw new ApiError('down', 502);
     if (res.status === 404) throw new ApiError('notfound', 404);
     if (res.status === 400) throw new ApiError('bad', 400);
     if (res.status === 503) throw new ApiError('unavailable', 503);
@@ -319,7 +323,7 @@
     }
     const base = (r && r.name) || CFG.rankNames[tier] || `Tier ${tier}`;
     const icon = tier <= 11 && sub >= 1 && sub <= 6
-      ? `${CFG.api}/v1/assets/ranks/${tier}/${sub}/image?format=webp`
+      ? `${CFG.imgApi}/v1/assets/ranks/${tier}/${sub}/image?format=webp`
       : (r && r.img) || '';
     return { tier, sub, name: sub ? `${base} ${sub}` : base, icon, color: (r && r.color) || '#999' };
   }
@@ -1246,7 +1250,7 @@
     const map = {
       rate: ['Слишком много запросов к API. Подождите {s} с и попробуйте снова.', { s: e.retryAfter || CFG.defaultCooldown }],
       notfound: ['Матч не найден ни в базе deadlock-api.com, ни в Steam. Проверьте Match ID: данные очень старых матчей и матчей из приватных лобби Valve не отдаёт.'],
-      steamlimit: ['Этого матча ещё нет в базе, а лимит загрузки новых матчей из Steam исчерпан (3 в час на IP). Попробуйте через {m} мин. Уже загруженные матчи открываются как обычно.', { m: Math.max(1, Math.ceil((e.retryAfter || 3600) / 60)) }],
+      steamlimit: ['Этого матча ещё нет в базе, а лимит загрузки новых матчей из Steam исчерпан. Попробуйте через {m} мин. Уже загруженные матчи открываются как обычно.', { m: Math.max(1, Math.ceil((e.retryAfter || 3600) / 60)) }],
       unavailable: ['Матч не найден или ещё не обработан. Если игра закончилась недавно — попробуйте позже.'],
       bad: ['Некорректный Match ID.'],
       server: ['API вернул ошибку ({code}). Попробуйте позже.', { code: e.status }],

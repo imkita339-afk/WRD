@@ -25,6 +25,7 @@ css/style.css
 js/app.js        — загрузка данных, роли, скоринг, рендер
 js/extras.js     — i18n RU/EN, кэш, история, share-карточка, «адвокат», deep links
 assets/bg.webp   — фоновый арт (замените своим)
+worker/          — необязательный API-прокси на Cloudflare Workers (см. ниже)
 ```
 
 Без сборщиков и зависимостей: достаточно открыть `index.html` через любой статический сервер.
@@ -41,7 +42,7 @@ python -m http.server 8080
 
 ## Данные
 
-Все запросы идут из браузера к публичному API [deadlock-api.com](https://deadlock-api.com), без ключей и без бэкенда.
+Все запросы идут из браузера к публичному API [deadlock-api.com](https://deadlock-api.com) — напрямую или через свой прокси из `worker/`, если он задан в `window.WR_API`.
 
 | Эндпоинт | Что берём |
 |---|---|
@@ -60,6 +61,34 @@ python -m http.server 8080
 Объекты (`team_objective_id`): 1–4 Guardian, 5–8 Walker, 10–11 Shrine, 12–15 Base Guardian, 9 и 0 — Patron. `team` у объекта — команда-владелец.
 
 Справочники кэшируются в `localStorage` на 24 часа, облегчённые данные последних 5 матчей — на 7 дней. При `429` или `503` с `Retry-After` сайт выдерживает паузу и не повторяет запросы автоматически.
+
+## Свой API-прокси (worker/)
+
+Откуда deadlock-api.com берёт матчи: их Steam-боты запрашивают у Game Coordinator Deadlock «соль» матча, по ней скачивают с серверов Valve файл `.meta.bz2`, распаковывают и декодируют protobuf `CMsgMatchMetaData`. Valve сильно ограничивает такие запросы, поэтому матч, которого ещё нет в их базе, без ключа можно загрузить только 3 раза в час с одного IP. Уже загруженные матчи отдаются почти без ограничений.
+
+Прокси в `worker/` убирает эти ошибки, насколько возможно:
+
+- добавляет API-ключ deadlock-api.com: новых матчей из Steam — 300 в час на ключ, приоритет в очереди при `503`;
+- навсегда хранит каждый открытый матч в Cloudflare KV (сжатым): повторно он открывается мгновенно, даже если deadlock-api.com лежит;
+- держит справочники героев, предметов и рангов и отдаёт их, когда deadlock-api.com недоступен;
+- при сбое deadlock-api.com отвечает `502` с CORS-заголовками — сайт сразу показывает, что лежит сервер, а не сеть;
+- пропускает только нужные сайту эндпоинты и ограничивает новые матчи до 5 в минуту с IP, чтобы чужие запросы не съели квоту ключа.
+
+Без ключа прокси вредит: все посетители выходят к deadlock-api.com с одного IP Cloudflare и делят на всех лимит 3 матча в час. Ключ выдают авторы deadlock-api.com — уточните условия у них; проект поддерживается через [Patreon](https://www.patreon.com/c/user?u=68961896) и [GitHub Sponsors](https://github.com/sponsors/raimannma).
+
+Деплой (нужны Node.js и бесплатный аккаунт Cloudflare):
+
+```bash
+cd worker
+npx wrangler login
+npx wrangler kv namespace create MATCHES   # вставьте выданный id в wrangler.toml
+npx wrangler secret put DEADLOCK_API_KEY   # ключ deadlock-api.com
+npx wrangler deploy
+```
+
+В `wrangler.toml` пропишите адрес сайта в `ALLOWED_ORIGINS` (например, `https://<user>.github.io`), а в `index.html` — адрес воркера: `window.WR_API = 'https://wrd-api.<subdomain>.workers.dev'`. Пустой `WR_API` возвращает прямые запросы к deadlock-api.com.
+
+Бесплатного плана Cloudflare хватает: 100 000 запросов к воркеру в сутки, 1 ГБ в KV (около 10 000 матчей), 1 000 новых матчей в сутки на запись.
 
 ## Модель оценки
 

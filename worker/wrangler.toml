@@ -1,0 +1,21 @@
+name = "wrd-api"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[vars]
+UPSTREAM = "https://api.deadlock-api.com"
+# Через запятую, без слеша в конце: "https://<user>.github.io,http://localhost:8080". Пусто — любой сайт.
+ALLOWED_ORIGINS = ""
+
+# Матчи и справочники. id выдаёт: npx wrangler kv namespace create MATCHES
+[[kv_namespaces]]
+binding = "MATCHES"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Не больше 5 новых (не закэшированных) матчей в минуту с одного IP
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+simple = { limit = 5, period = 60 }
+
+# Ключ deadlock-api.com не хранится здесь: npx wrangler secret put DEADLOCK_API_KEY
