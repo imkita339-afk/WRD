@@ -17,7 +17,7 @@
     api: (window.WR_API || 'https://api.deadlock-api.com').replace(/\/+$/, ''),
     direct: 'https://api.deadlock-api.com',  // картинки рангов, новые матчи и запасной путь
     assetsTTL: 24 * 60 * 60 * 1000,   // справочники героев/предметов/рангов — 24 часа
-    requestTimeout: 30000,
+    requestTimeout: 45000,            // с запасом на загрузку матча через своего Steam-бота
     proxyStoreDelay: 5000,            // через сколько мс после прямой загрузки матча просить прокси сохранить его
     defaultCooldown: 60,              // пауза при 429/503 без Retry-After, секунды
     teams: { 0: 'Amber Hand', 1: 'Sapphire Flame' },

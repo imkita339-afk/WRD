@@ -2,3 +2,6 @@
 .DS_Store
 Thumbs.db
 .wrangler/
+node_modules/
+bot/data/
+.dev.vars

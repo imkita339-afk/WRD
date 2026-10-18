@@ -19,3 +19,12 @@ namespace_id = "1001"
 simple = { limit = 20, period = 60 }
 
 # Ключ deadlock-api.com (необязательно) не хранится здесь: npx wrangler secret put DEADLOCK_API_KEY
+
+# Связь со Steam-ботом (папка bot/): токен бота — npx wrangler secret put BOT_TOKEN
+[[durable_objects.bindings]]
+name = "BOT"
+class_name = "BotHub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BotHub"]

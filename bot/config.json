@@ -1,0 +1,4 @@
+{
+  "proxy": "wss://wrd-api.imkita339.workers.dev/bot/connect",
+  "dailyLimit": 40
+}

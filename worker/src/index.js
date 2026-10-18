@@ -9,8 +9,11 @@
  *    повторные открытия не трогают deadlock-api.com вовсе;
  *  - держит справочники в KV и отдаёт их, даже когда deadlock-api.com лежит;
  *  - отвечает на любые ошибки с CORS-заголовками, чтобы сайт видел настоящий статус.
+ *  - матчи, которых нет в базе deadlock-api.com (или когда она лежит), просит у своего
+ *    Steam-бота (папка bot/): бот держит WebSocket к Durable Object BotHub.
  * Пропускает только эндпоинты, которые нужны сайту, — ключ нельзя использовать для чужих запросов.
  */
+import { DurableObject } from 'cloudflare:workers';
 
 const MATCH_RE = /^\/v1\/matches\/(\d{1,12})\/metadata$/;
 const ASSET_RE = /^\/v1\/assets\/(heroes|items|ranks)$/;
@@ -19,12 +22,14 @@ const ACCOUNT_IDS_RE = /^\d{1,12}(,\d{1,12}){0,23}$/;
 
 const ASSET_FRESH = 6 * 60 * 60 * 1000;      // справочник старше 6 часов обновляется из апстрима
 const UPSTREAM_TIMEOUT = 25000;
+const BOT_TIMEOUT = 30000;                   // бот: запрос к GC и загрузка файла с серверов Valve
 const PASS_HEADERS = ['retry-after', 'ratelimit-limit', 'ratelimit-remaining', 'ratelimit-reset',
   'ratelimit-period', 'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset'];
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === '/bot/connect') return botConnect(request, url, env);
     const cors = corsHeaders(request, env);
     if (!cors) return json({ error: 'origin_not_allowed' }, 403, {});
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
@@ -65,16 +70,125 @@ async function match(id, request, env, ctx, cors) {
   // Без ключа из Steam не грузим: все воркеры выходят к deadlock-api.com с общего адреса,
   // и лимит 3 матча в час на IP был бы общим для всех. Такие матчи сайт берёт напрямую.
   const steam = !!env.DEADLOCK_API_KEY;
-  const res = await upstream(`/v1/matches/${id}/metadata${steam ? '' : '?disable_steam=true'}`, env);
-  const text = await res.text();
+  let res, text;
+  try {
+    res = await upstream(`/v1/matches/${id}/metadata${steam ? '' : '?disable_steam=true'}`, env);
+    text = await res.text();
+  } catch (e) {
+    // deadlock-api.com лежит — матч может достать свой бот
+    const viaBot = await fromBot(id, key, env, ctx, cors);
+    if (viaBot) return viaBot;
+    throw e;
+  }
   if (res.ok && isCompleteMatch(text)) {
     ctx.waitUntil(gzip(text).then((buf) => env.MATCHES.put(key, buf)));
     return jsonText(text, 200, cors, 'miss', 'public, max-age=604800, immutable');
+  }
+  // Нет в базе (404) или deadlock-api.com не смог отдать (5xx, «Retry later») — спрашиваем бота
+  if (res.status === 404 || res.status >= 500) {
+    const viaBot = await fromBot(id, key, env, ctx, cors);
+    if (viaBot) return viaBot;
   }
   if (res.status === 404 && !steam) {
     return json({ error: 'not_in_database' }, 404, { ...cors, 'X-WR-Direct': '1' });
   }
   return relay(res, text, cors, 'no-store');
+}
+
+// Матч через своего Steam-бота. null — бот не помог (не подключён, лимит, ошибка):
+// тогда сайт загрузит матч напрямую
+async function fromBot(id, key, env, ctx, cors) {
+  if (!env.BOT) return null;
+  let r;
+  try {
+    const res = await env.BOT.get(env.BOT.idFromName('bot')).fetch(`https://bot/match?id=${id}`);
+    r = await res.json();
+  } catch (e) {
+    return null;
+  }
+  if (r.status === 'ok' && typeof r.gz === 'string') {
+    const buf = Uint8Array.from(atob(r.gz), (c) => c.charCodeAt(0));
+    const text = await gunzip(buf);
+    if (!isCompleteMatch(text)) return null;
+    ctx.waitUntil(env.MATCHES.put(key, buf));
+    return jsonText(text, 200, cors, 'bot', 'public, max-age=604800, immutable');
+  }
+  if (r.status === 'not_found') return json({ error: 'not_found' }, 404, cors);
+  if (r.status === 'in_flight') return json({ error: 'match_in_progress' }, 503, { ...cors, 'Retry-After': '600' });
+  return null;
+}
+
+// ---------- Steam-бот: WebSocket от бота к Durable Object ----------
+async function botConnect(request, url, env) {
+  if (!env.BOT || !env.BOT_TOKEN) return json({ error: 'bot_disabled' }, 404, {});
+  if (request.headers.get('Upgrade') !== 'websocket') return json({ error: 'websocket_expected' }, 426, {});
+  if (!(await sameSecret(url.searchParams.get('token') || '', env.BOT_TOKEN))) {
+    // Принимаем и сразу закрываем с кодом 4001 — бот покажет понятную причину
+    const [client, server] = Object.values(new WebSocketPair());
+    server.accept();
+    server.close(4001, 'bad token');
+    return new Response(null, { status: 101, webSocket: client });
+  }
+  return env.BOT.get(env.BOT.idFromName('bot')).fetch(new Request('https://bot/connect', request));
+}
+
+async function sameSecret(a, b) {
+  const enc = new TextEncoder();
+  const [x, y] = await Promise.all([a, b].map((v) => crypto.subtle.digest('SHA-256', enc.encode(v))));
+  return crypto.subtle.timingSafeEqual(x, y);
+}
+
+// Один экземпляр на всех: держит WebSocket бота и пересылает ему запросы матчей.
+// Hibernation API: пока запросов нет, объект выгружается и не тратит лимиты.
+export class BotHub extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.waiting = new Map();
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname === '/connect') {
+      for (const old of this.ctx.getWebSockets()) old.close(1012, 'replaced');
+      const [client, server] = Object.values(new WebSocketPair());
+      this.ctx.acceptWebSocket(server);
+      return new Response(null, { status: 101, webSocket: client });
+    }
+    if (url.pathname === '/match') {
+      const ws = this.ctx.getWebSockets()[0];
+      if (!ws) return Response.json({ status: 'offline' });
+      const reqId = crypto.randomUUID();
+      const reply = await new Promise((resolve) => {
+        const timer = setTimeout(() => { this.waiting.delete(reqId); resolve({ status: 'timeout' }); }, BOT_TIMEOUT);
+        this.waiting.set(reqId, (r) => { clearTimeout(timer); resolve(r); });
+        try {
+          ws.send(JSON.stringify({ type: 'match', reqId, id: url.searchParams.get('id') }));
+        } catch (e) {
+          this.waiting.delete(reqId);
+          clearTimeout(timer);
+          resolve({ status: 'offline' });
+        }
+      });
+      return Response.json(reply);
+    }
+    return new Response('not found', { status: 404 });
+  }
+
+  webSocketMessage(ws, message) {
+    let m;
+    try { m = JSON.parse(message); } catch (e) { return; }
+    if (!m || m.type !== 'result') return;
+    const done = this.waiting.get(m.reqId);
+    if (done) {
+      this.waiting.delete(m.reqId);
+      done(m);
+    }
+  }
+
+  webSocketClose(ws, code) {
+    try { ws.close(code === 1005 || code === 1006 ? 1000 : code, 'closed'); } catch (e) { /* уже закрыт */ }
+  }
 }
 
 function isCompleteMatch(text) {
