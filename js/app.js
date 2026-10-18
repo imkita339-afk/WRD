@@ -954,15 +954,15 @@
     });
     const top = r.reasons.slice(0, 3).map((x) => `<li><b>${t(x.title)}</b><span>${x.detail}</span></li>`).join('');
     el.innerHTML = `
-      <div class="v-portrait">${img(r.hero.card || r.hero.small, r.hero.name)}<span class="stamp">RUINER</span></div>
+      <div class="v-portrait">${img(r.hero.card || r.hero.small, r.hero.name)}<span class="v-scan" aria-hidden="true"></span><span class="stamp">RUINER</span></div>
       <div class="v-main">
         <p class="kicker">${t('Вердикт')} · ${tf('матч {id}', { id: A.id })}</p>
         <div class="v-top">${rankHtml(r)}<span>·</span>${teamSpan(r.team)}<span>·</span>${roleBadge(r)}</div>
         <div class="v-name">${nameHtml(r)}</div>
         <div class="v-hero">${esc(r.hero.name)} · K/D/A ${kda(r)} · ${fmt(r.nw)} souls</div>
         <div class="v-meters">
-          <div class="meter"><small>${t('Влияние на поражение')}</small><b class="lvl-${lv.idx}">${t(lv.label)} · ${r.score}</b></div>
-          <div class="meter"><small>${t('Уверенность оценки')}</small><b>${A.confidence}%</b></div>
+          <div class="meter lvl-${lv.idx}"><small>${t('Влияние на поражение')}</small><b class="lvl-${lv.idx}">${t(lv.label)} · <span class="num" data-count="${r.score}">${r.score}</span></b><i class="meter-bar" style="--v:${Math.max(0, Math.min(100, r.score)) / 100}"></i></div>
+          <div class="meter"><small>${t('Уверенность оценки')}</small><b><span class="num" data-count="${A.confidence}">${A.confidence}</span>%</b><i class="meter-bar" style="--v:${Math.max(0, Math.min(100, A.confidence)) / 100}"></i></div>
         </div>
         <p class="v-summary">${summary}</p>
         ${top ? `<ul class="reasons">${top}</ul>` : `<p class="muted">${t('Явных провалов нет — он просто чуть слабее остальных по совокупности показателей.')}</p>`}
@@ -1090,7 +1090,7 @@
     if (A.ruiner) {
       A.ruiner.deaths.forEach((d) => {
         const v = diffAt(A.curve, d.t);
-        marks += `<circle cx="${x(d.t).toFixed(1)}" cy="${y(v).toFixed(1)}" r="6" fill="#ff3b3b" stroke="#07080b" stroke-width="2"><title>${tf('{t} — смерть {name}', { t: time(d.t), name: A.ruiner.name })}</title></circle>`;
+        marks += `<circle class="fx-mark" style="--d:${(d.t / dur).toFixed(3)}" cx="${x(d.t).toFixed(1)}" cy="${y(v).toFixed(1)}" r="6" fill="#ff3b3b" stroke="#07080b" stroke-width="2"><title>${tf('{t} — смерть {name}', { t: time(d.t), name: A.ruiner.name })}</title></circle>`;
       });
     }
     el.innerHTML = `${head}<div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t('Преимущество по souls'))}">
@@ -1106,8 +1106,8 @@
       ${grid}
       <text x="${l + 8}" y="${tp + 14}" fill="#e8a33d" font-size="13" font-weight="700">${tf('{team} впереди', { team: 'Amber Hand' })}</text>
       <text x="${l + 8}" y="${H - b - 8}" fill="#79b0ff" font-size="13" font-weight="700">${tf('{team} впереди', { team: 'Sapphire Flame' })}</text>
-      <path d="${area}" fill="url(#gArea)"/>
-      <path d="${line}" fill="none" stroke="url(#gLine)" stroke-width="3" stroke-linejoin="round"/>
+      <path class="fx-area" d="${area}" fill="url(#gArea)"/>
+      <path class="fx-line" d="${line}" pathLength="1" fill="none" stroke="url(#gLine)" stroke-width="3" stroke-linejoin="round"/>
       ${marks}
     </svg></div>
     <div class="chart-legend"><span><i style="background:var(--amber)"></i>Amber Hand</span><span><i style="background:var(--sapphire)"></i>Sapphire Flame</span>${A.ruiner ? `<span><i style="background:var(--ruin)"></i>${tf('смерти {name}', { name: A.ruiner.name })}</span>` : ''}</div>
@@ -1138,8 +1138,8 @@
     }).join('');
     const cell = (label, value) => `<div><small>${label}</small><b>${value}</b></div>`;
     const right = loserCard
-      ? `<div class="pc-score"><b class="lvl-${p.level.idx}">${p.score}</b><small>${t(p.level.label)}</small></div>`
-      : `<div class="pc-score"><b class="pos">${p.perf}</b><small>${t('вклад')}</small></div>`;
+      ? `<div class="pc-score"><b class="lvl-${p.level.idx}" data-count="${p.score}">${p.score}</b><small>${t(p.level.label)}</small></div>`
+      : `<div class="pc-score"><b class="pos" data-count="${p.perf}">${p.perf}</b><small>${t('вклад')}</small></div>`;
     return `<article class="pcard${A.ruiner === p ? ' is-ruiner' : ''}">
       <div class="pc-head">${img(p.hero.small || p.hero.card, p.hero.name, 'hero')}
         <div class="pc-id"><div class="pc-name" title="${esc(p.name)}">${nameHtml(p)}</div>
@@ -1211,7 +1211,7 @@
     const ev = A.episodes;
     if (!ev.length) { $('episodes').innerHTML = `<h2 class="sec-title">${t('Ключевые эпизоды')}</h2><p class="muted">${t('Нет данных для эпизодов.')}</p>`; return; }
     $('episodes').innerHTML = `<h2 class="sec-title">${t('Ключевые эпизоды')}</h2><div class="episodes">${ev.map((e) => `
-      <div class="ep">
+      <div class="ep ${e.neg ? 'ep-neg' : 'ep-pos'}">
         <div class="ep-time${e.derived ? ' derived' : ''}">${e.derived ? t('По итогам матча') : time(e.t)}</div>
         <div><span class="ep-tag ${e.neg ? 'neg' : 'pos'}">${e.neg ? t('негативный сигнал') : t('положительный сигнал')}</span>
           <h4>${e.title}</h4>
@@ -1294,6 +1294,7 @@
     if (busy) return;
     busy = true;
     $('go').disabled = true;
+    if (WR.fx) WR.fx.loading(true);
     $('matchId').value = id;
     WR.track('analyze');
     try {
@@ -1307,6 +1308,7 @@
       const A = analyze(M);
       current = A;
       renderAll(A);
+      if (WR.fx) WR.fx.reveal();
       if (A.ruiner) WR.history.add({ id, nick: A.ruiner.name, hero: A.ruiner.hero.name, img: safeUrl(A.ruiner.hero.small) });
       else WR.history.add({ id, nick: '', hero: '', img: '' });
       WR.history.render($('history'), start);
@@ -1320,6 +1322,7 @@
     } finally {
       busy = false;
       $('go').disabled = false;
+      if (WR.fx) WR.fx.loading(false);
     }
   }
 
