@@ -1,8 +1,8 @@
 :root {
   --bg: #07080b;
   --bg-2: #0d0f14;
-  --panel: rgba(14, 16, 22, 0.74);
-  --panel-2: rgba(22, 25, 33, 0.78);
+  --panel: rgba(14, 16, 22, 0.9);
+  --panel-2: rgba(22, 25, 33, 0.9);
   --line: rgba(255, 255, 255, 0.08);
   --line-2: rgba(255, 255, 255, 0.14);
   --text: #ece7df;
@@ -173,8 +173,6 @@ button { font: inherit; color: inherit; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 24px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   min-width: 0;
 }
 .panel:empty { display: none; }
@@ -391,9 +389,7 @@ button { font: inherit; color: inherit; }
   pointer-events: none;
   background:
     radial-gradient(120% 90% at 50% 0%, transparent 55%, rgba(7, 8, 11, 0.7) 100%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  opacity: 0.55;
-  mix-blend-mode: soft-light;
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 .embers {
   position: absolute;
@@ -672,16 +668,21 @@ button { font: inherit; color: inherit; }
 }
 
 /* ---------- модалка ---------- */
-.modal { -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: fx-fade .25s ease both; }
+.modal { background: rgba(0, 0, 0, .8); animation: fx-fade .25s ease both; }
 .modal-card { box-shadow: 0 40px 100px -30px rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 59, 59, .12); animation: fx-modal .35s cubic-bezier(.2, .9, .3, 1.15) both; }
 @keyframes fx-modal { from { opacity: 0; transform: translateY(14px) scale(.96); } }
 
 /* ---------- мобильные ---------- */
 @media (max-width: 600px) {
-  .bg::after { opacity: .35; }
   .meter b { font-size: 19px; }
   .verdict::before { box-shadow: 0 0 0 1px rgba(255, 59, 59, .45), 0 0 28px -6px rgba(255, 59, 59, .45); }
 }
+
+/* ---------- облегчённый режим и пауза фона (классы ставит js/fx.js) ---------- */
+.fx-bg-off .bg::before, .fx-bg-off .glitch::before, .fx-bg-off .glitch::after { animation-play-state: paused; }
+.fx-lite .bg::before, .fx-lite .verdict::before, .fx-lite .glitch::before, .fx-lite .glitch::after { animation: none; }
+.fx-lite .verdict::before { opacity: .7; }
+.fx-lite .embers { display: none; }
 
 /* ---------- prefers-reduced-motion ---------- */
 @media (prefers-reduced-motion: reduce) {

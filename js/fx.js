@@ -11,12 +11,19 @@
   const reduced = () => mq.matches;
   const lowEnd = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
   const finePointer = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const saveData = !!(navigator.connection && navigator.connection.saveData);
+  const root = document.documentElement;
+
+  // Облегчённый режим: без искр и бесконечных анимаций фона
+  function goLite() { root.classList.add('fx-lite'); embers.stop(); }
 
   // ======================================================================
-  // Искры на фоне: несколько десятков точек, 30 кадров/с, пауза вне экрана
+  // Искры на фоне: несколько десятков точек, 30 кадров/с, пауза вне экрана.
+  // Если сам браузер стабильно не успевает 25 кадров/с — переходим в облегчённый режим.
   // ======================================================================
   const embers = (function () {
-    let canvas, ctx, sprites, parts = [], raf = 0, last = 0, visible = true, w = 0, h = 0, dpr = 1;
+    let canvas, ctx, sprites, parts = [], raf = 0, last = 0, prev = 0, visible = true, w = 0, h = 0, dpr = 1;
+    let samples = [], probed = false;
     const COLORS = [[255, 120, 60], [255, 70, 50], [232, 163, 61], [121, 176, 255]];
 
     function sprite(rgb) {
@@ -47,7 +54,7 @@
     }
 
     function resize() {
-      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      dpr = Math.min(window.devicePixelRatio || 1, lowEnd ? 1 : 1.5);
       w = canvas.clientWidth;
       h = canvas.clientHeight;
       canvas.width = Math.round(w * dpr);
@@ -58,8 +65,19 @@
       parts.length = n;
     }
 
+    // медиана интервалов между кадрами, первые кадры после запуска пропускаем
+    function probe(now) {
+      if (prev) samples.push(now - prev);
+      prev = now;
+      if (samples.length < 140) return;
+      probed = true;
+      const s = samples.slice(20).sort((a, b) => a - b);
+      if (s[s.length >> 1] > 40) goLite();
+    }
+
     function frame(now) {
       raf = requestAnimationFrame(frame);
+      if (!probed) probe(now);
       if (now - last < 33) return;
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
@@ -80,7 +98,10 @@
 
     function run() {
       if (raf || !visible || document.hidden || reduced()) return;
+      if (root.classList.contains('fx-lite')) return;
       last = performance.now();
+      prev = 0;
+      samples = [];
       raf = requestAnimationFrame(frame);
     }
     function stop() { cancelAnimationFrame(raf); raf = 0; }
@@ -100,12 +121,16 @@
       window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(resize, 150); });
       document.addEventListener('visibilitychange', () => (document.hidden ? stop() : run()));
       if ('IntersectionObserver' in window) {
-        new IntersectionObserver((es) => { visible = es[0].isIntersecting; visible ? run() : stop(); }).observe(canvas);
+        new IntersectionObserver((es) => {
+          visible = es[0].isIntersecting;
+          root.classList.toggle('fx-bg-off', !visible); // фон за экраном — его CSS-анимации на паузу
+          visible ? run() : stop();
+        }).observe(canvas);
       }
       if (mq.addEventListener) mq.addEventListener('change', () => (reduced() ? (stop(), ctx.clearRect(0, 0, w, h)) : run()));
       run();
     }
-    return { init };
+    return { init, stop };
   })();
 
   // ======================================================================
@@ -190,6 +215,7 @@
   }
 
   function init() {
+    if (saveData) root.classList.add('fx-lite');
     embers.init();
     spotlight();
   }

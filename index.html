@@ -17,8 +17,14 @@
   <script>
     // Код сайта GoatCounter (например, "whoruined"). Пусто — счётчик выключен.
     window.WR_GOATCOUNTER = '';
-    // Ссылка и имя автора для подвала.
-    window.WR_AUTHOR = { name: 'Автор', url: 'https://github.com/imkita339-afk' };
+    // Имя автора и ссылки для подвала.
+    window.WR_AUTHOR = {
+      name: 'Averno',
+      links: [
+        { label: 'Steam', url: 'https://steamcommunity.com/id/borntobeaione/' },
+        { label: 'GitHub', url: 'https://github.com/imkita339-afk' },
+      ],
+    };
     // Адрес своего прокси из папки worker/ (например, "https://wrd-api.<subdomain>.workers.dev").
     // Пусто — запросы идут напрямую к api.deadlock-api.com.
     window.WR_API = 'https://wrd-api.imkita339.workers.dev';
@@ -65,7 +71,7 @@
   </main>
 
   <footer class="footer">
-    <p><span data-i18n>Данные:</span> <a href="https://deadlock-api.com" target="_blank" rel="noopener">deadlock-api.com</a> · <span data-i18n>Автор:</span> <a id="authorLink" href="#" target="_blank" rel="noopener">—</a></p>
+    <p><span data-i18n>Данные:</span> <a href="https://deadlock-api.com" target="_blank" rel="noopener">deadlock-api.com</a> · <span data-i18n>Автор:</span> <b id="authorName">—</b><span id="authorLinks"></span></p>
     <p class="muted" data-i18n>Неофициальный фан-проект. Deadlock — товарный знак Valve Corporation. Сайт не связан с Valve.</p>
   </footer>
 

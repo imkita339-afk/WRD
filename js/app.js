@@ -1363,9 +1363,9 @@
     });
 
     const author = window.WR_AUTHOR || {};
-    const a = $('authorLink');
-    if (author.url && safeUrl(author.url)) a.href = author.url;
-    a.textContent = author.name || '—';
+    $('authorName').textContent = author.name || '—';
+    $('authorLinks').innerHTML = (author.links || []).filter((l) => safeUrl(l.url))
+      .map((l) => ` · <a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('');
 
     WR.history.render($('history'), start);
     const deep = WR.deepLink.read();
