@@ -70,6 +70,14 @@
       minSpend: 4000,
       confSpan: 1.2,
       supportBias: -0.5,
+      // Предметы, которые берут ради союзников: вес — насколько это признак саппорта.
+      // Healing Booster, Healing Rite и Restorative Locket часто берут и для себя, поэтому вес меньше.
+      supportItems: {
+        'Guardian Ward': 1, 'Rescue Beam': 1, 'Healing Nova': 1, 'Healing Tempo': 1, 'Celestial Blessing': 1,
+        'Healing Rite': 0.5, 'Restorative Locket': 0.5, 'Healing Booster': 0.5,
+      },
+      supportItemPts: 1,              // прибавка к оценке support за единицу веса
+      supportItemCap: 3,              // больше трёх «единиц» уже ничего не добавляют
       heroPrior: {
         marksman: { carry: 0.35 },
         assassin: { carry: 0.2 },
@@ -524,9 +532,19 @@
     const fallback = [];
     L.forEach((p) => {
       const spend = { weapon: 0, vitality: 0, spirit: 0 };
-      p.bought.forEach((i) => { if (spend[i.slot] != null) spend[i.slot] += i.cost || 0; });
+      const SI = CFG.role.supportItems;
+      const sup = new Map();          // предмет поддержки → его цена (апгрейды не считаем дважды)
+      p.bought.forEach((i) => {
+        if (spend[i.slot] != null) spend[i.slot] += i.cost || 0;
+        if (SI[i.name] && !sup.has(i.name)) sup.set(i.name, i.cost || 0);
+      });
       const total = spend.weapon + spend.vitality + spend.spirit;
       p.slotMix = total ? { weapon: spend.weapon / total, vitality: spend.vitality / total, spirit: spend.spirit / total } : null;
+      p.supportItems = [...sup.keys()];
+      const supW = Math.min(CFG.role.supportItemCap, sum(p.supportItems, (nm) => SI[nm]));
+      // предметы поддержки лежат в vitality, но это не признак танка
+      const supSpend = sum([...sup.values()], (c) => c);
+      const tankVit = total ? Math.max(0, spend.vitality - supSpend) / total : 0;
       if (total < CFG.role.minSpend || p.bought.length < 3) { fallback.push(p); return; }
       const r = p.nwShare * n;
       const takenR = p.taken / avgTaken;
@@ -537,9 +555,11 @@
       const s = {
         carry: 2 * (r - 1) + 4 * (m.weapon - 1 / 3) + (prior.carry || 0),
         spirit: 2 * (r - 1) + 4 * (m.spirit - 1 / 3) + (prior.spirit || 0),
-        tank: 4 * (m.vitality - 1 / 3) + 1.5 * (takenR - 1) + (prior.tank || 0),
-        support: 3 * (1 - r) + 0.8 * (utilR - 1) + 2 * (assistR - 0.65) + CFG.role.supportBias,
+        tank: 4 * (tankVit - 1 / 3) + 1.5 * (takenR - 1) + (prior.tank || 0),
+        // богатый саппорт штрафуется мягче, чем бедный поощряется: хорошо фармящий хилер всё ещё хилер
+        support: (r < 1 ? 3 : 1.5) * (1 - r) + 0.8 * (utilR - 1) + 2 * (assistR - 0.65) + CFG.role.supportBias + CFG.role.supportItemPts * supW,
       };
+      p.roleScores = s;
       const ranked = Object.entries(s).sort((a, b) => b[1] - a[1]);
       p.role = ranked[0][0];
       p.roleConf = clamp01((ranked[0][1] - ranked[1][1]) / CFG.role.confSpan);
@@ -996,7 +1016,8 @@
       ? `<p class="note">${tf('Следующий по шкале — {name} ({hero}): {score}. Разница — {gap}.', { name: A.near.name, hero: A.near.hero.name, score: A.near.score, gap: r.score - A.near.score })}</p>` : '';
     const role = `<p class="note">${r.roleFallback
       ? t('Роль определена по net worth: данных о предметах недостаточно.')
-      : tf('Роль определена по доле souls ({nw}%) и сборке: weapon {w}%, vitality {v}%, spirit {s}%.', { nw: pct(r.nwShare), w: pct(r.slotMix.weapon), v: pct(r.slotMix.vitality), s: pct(r.slotMix.spirit) })}</p>`;
+      : tf('Роль определена по доле souls ({nw}%) и сборке: weapon {w}%, vitality {v}%, spirit {s}%.', { nw: pct(r.nwShare), w: pct(r.slotMix.weapon), v: pct(r.slotMix.vitality), s: pct(r.slotMix.spirit) })}${r.supportItems && r.supportItems.length
+      ? ' ' + tf('Предметы поддержки: {list}.', { list: r.supportItems.join(', ') }) : ''}</p>`;
     const calib = `<p class="note">${A.lobbyTier != null
       ? tf('Ориентиры souls/min скорректированы под средний ранг лобби ({rank}) и длительность игры: ×{mul}.', { rank: rankInfo(Math.round(A.lobbyTier) * 10).name, mul: (A.rankMul * A.durMul).toFixed(2) })
       : tf('Ранги игроков неизвестны — ориентиры скорректированы только под длительность игры: ×{mul}.', { mul: A.durMul.toFixed(2) })}</p>`;
@@ -1373,7 +1394,7 @@
   }
 
   // для отладки и для extras.js
-  WR.app = { CFG, rankInfo, ROLE_LABEL, COMP_LABEL };
+  WR.app = { CFG, rankInfo, ROLE_LABEL, COMP_LABEL, get current() { return current; } };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

@@ -233,6 +233,7 @@ window.WR = (function () {
     "Роль определена неуверенно": "Role detection is uncertain",
     "Роль определена по net worth: данных о предметах недостаточно.": "Role estimated from net worth: not enough item data.",
     "Роль определена по доле souls ({nw}%) и сборке: weapon {w}%, vitality {v}%, spirit {s}%.": "Role estimated from souls share ({nw}%) and build: weapon {w}%, vitality {v}%, spirit {s}%.",
+    "Предметы поддержки: {list}.": "Support items: {list}.",
     "Руинер: {name} ({hero}) — влияние на поражение: {level} ({score}), уверенность {conf}%": "Ruiner: {name} ({hero}) — impact on the loss: {level} ({score}), confidence {conf}%",
     "СКАЧАТЬ КАРТОЧКУ": "DOWNLOAD CARD",
     "Самый рисковый игрок": "Riskiest player",
